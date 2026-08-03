@@ -1,0 +1,6 @@
+apiVersion: v2
+name: data-prepper
+description: OpenSearch Data Prepper — ingests dummy-app-http logs + dummy-app-otel traces and ships them to OpenSearch via the load-balancer
+type: application
+version: 0.1.0
+appVersion: "2.16.0"

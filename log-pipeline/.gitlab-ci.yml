@@ -1,0 +1,59 @@
+---
+stages:
+  - .pre
+  - lint
+  - build
+  - promote    # push new image tags to the GitOps repo
+  - bootstrap  # apply ArgoCD Application manifests to the cluster (idempotent)
+
+# =============================================================================
+# Project-level variables — edit these values and the pipeline will work.
+# Sensitive values (GITOPS_TOKEN, *_ARGOCD_TOKEN) must be set in
+# GitLab Settings → CI/CD → Variables (masked + protected) — never here.
+#
+# This is a standalone project — it is NOT wired into Zabbix_Portal's pipeline
+# or GitOps repo. It only reuses the same pattern.
+# =============================================================================
+variables:
+
+  # ── Runners ───────────────────────────────────────────────────────────────
+  SHARED_RUNNERS_TAG: "<your-build-runner-tag>" # privileged runner for Kaniko docker builds
+
+  # ── Private registry images ───────────────────────────────────────────────
+  KANIKO_IMAGE: "<your-kaniko-image>" # e.g. your-registry/kaniko:latest
+  PYTHON_IMAGE: "<your-python-image>" # e.g. your-registry/python:3.12-slim
+  HELM_IMAGE: "<your-helm-image>" # e.g. your-registry/helm:latest
+  GIT_IMAGE: "<your-git-image>" # e.g. your-registry/alpine-git:latest (needs git + yq + curl)
+
+  # ── ArgoCD servers (non-sensitive — URLs only) ───────────────────────────
+  # Tokens MUST be set in GitLab Settings → CI/CD → Variables (masked + protected):
+  #   STAGING_ARGOCD_TOKEN, PROD_ARGOCD_TOKEN, DR_ARGOCD_TOKEN
+  STAGING_ARGOCD_SERVER: "<your-staging-argocd-server>" # e.g. argocd.apps.staging.example.com
+  STAGING_ARGOCD_TOKEN: "<your-staging-argocd-token>" # masked — set in GitLab CI/CD Variables
+  PROD_ARGOCD_SERVER: "<your-prod-argocd-server>" # e.g. argocd.apps.prod.example.com
+  PROD_ARGOCD_TOKEN: "<your-prod-argocd-token>" # masked — set in GitLab CI/CD Variables
+  DR_ARGOCD_SERVER: "<your-dr-argocd-server>" # e.g. argocd.apps.dr.example.com
+  DR_ARGOCD_TOKEN: "<your-dr-argocd-token>" # masked — set in GitLab CI/CD Variables
+
+  # ── Artifactory registry ──────────────────────────────────────────────────
+  ARTIFACTORY_REGISTRY: "<your-artifactory-registry>"  # registry path (e.g. artifactory.example.com/docker-local)
+
+  # ── Build control ────────────────────────────────────────────────────────
+  # Set to "1" to force-build and redeploy every app regardless of code changes.
+  # Leave empty ("") for automatic change detection.
+  FORCE_BUILD: ""
+
+  # ── GitOps repo ───────────────────────────────────────────────────────────
+  # HTTPS URL of the log-pipeline_GitOps repo
+  GITOPS_REPO_URL: "<your-gitops-repo-url>"
+  # GITOPS_TOKEN: masked CI variable — set in GitLab Settings → CI/CD → Variables
+  #   GitLab access token with write_repository scope on the GitOps repo.
+
+  # ── Project name ─────────────────────────────────────────────────────────
+  PROJECT_NAME: "log-pipeline"                       # Helm release name prefix
+
+include:
+  - local: ".gitlab/ci/common.yml"
+  - local: ".gitlab/ci/detect.yml"
+  - local: ".gitlab/ci/python.yml"
+  - local: ".gitlab/ci/gitops.yml"

@@ -1,0 +1,55 @@
+
+log-pipeline:
+  source:
+    http:
+      port: 2021
+      path: "/log/ingest"
+  sink:
+    - opensearch:
+        hosts: 
+          - "https://<your-opensearch-host>:9200" # PRIVATE NETWORK: your OpenSearch endpoint
+        index: "dummy-app-logs-direct-%{yyyy.MM.dd}"
+        username: "<your-opensearch-username>"              # PRIVATE NETWORK: real username
+        password: "<your-opensearch-password>"              # PRIVATE NETWORK: real password
+        insecure: true  # set false once you're using a CA-signed cert instead of self-signed
+ 
+entry-pipeline:
+  delay: "100"
+  source:
+    otel_trace_source:
+      ssl: false
+      port: 21890
+  sink:
+    - pipeline:
+        name: raw-trace-pipeline
+    - pipeline:
+        name: service-map-pipeline
+ 
+raw-trace-pipeline:
+  source:
+    pipeline:
+      name: entry-pipeline
+  processor:
+    - otel_traces:
+  sink:
+    - opensearch:
+        hosts: 
+          - "https://<your-opensearch-host>:9200" # PRIVATE NETWORK: your OpenSearch endpoint
+        index_type: trace-analytics-raw
+        username: "<your-opensearch-username>"
+        password: "<your-opensearch-password>"
+ 
+service-map-pipeline:
+  delay: "100"
+  source:
+    pipeline:
+      name: entry-pipeline
+  processor:
+    - service_map:
+  sink:
+    - opensearch:
+        hosts: 
+          - "https://<your-opensearch-host>:9200" # PRIVATE NETWORK: your OpenSearch endpoint
+        index_type: trace-analytics-service-map
+        username: "<your-opensearch-username>"
+        password: "<your-opensearch-password>"

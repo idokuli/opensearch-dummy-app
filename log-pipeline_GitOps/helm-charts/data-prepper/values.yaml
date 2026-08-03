@@ -1,0 +1,118 @@
+replicaCount: 1
+
+image:
+  # PROJECT-SPECIFIC: mirror opensearchproject/data-prepper:2.16.0 to your
+  # Artifactory (it is NOT built by this project's CI — it's a vendored
+  # upstream image). 2.16.0 is compatible with OpenSearch 3.7.0's REST API.
+  repository: <your-artifactory-registry>/data-prepper
+  tag: "2.16.0"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+# Left blank on purpose: Helm's default fullname ("<release-name>-data-prepper")
+# already gives each environment (staging/production/dr) a unique Service
+# name inside the shared "devops" namespace. The dummy-app-http/otel charts'
+# DATA_PREPPER_URL / OTLP_ENDPOINT values must be kept in sync with this name
+# per environment — see helm-charts/log-pipeline/values-<env>.yaml.
+fullnameOverride: ""
+
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podLabels: {}
+
+# PROJECT-SPECIFIC: the upstream data-prepper image runs as a fixed non-root
+# UID by default. Under OpenShift's "restricted" SCC the platform assigns its
+# own arbitrary UID with GID 0 — verify after first deploy whether the image
+# tolerates that (it needs to be able to write to its home/log dirs as group
+# 0). If it doesn't, either grant this ServiceAccount the "anyuid" SCC or
+# switch to a custom image that chowns to GID 0 like the dummy-app images do.
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  httpSourcePort: 2021        # dummy-app-http -> log-pipeline source
+  otelTraceSourcePort: 21890  # dummy-app-otel -> otel_trace_source
+  serverPort: 4900            # Data Prepper's own health/metrics server (GET /list)
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+livenessProbe:
+  httpGet:
+    path: /list
+    port: server
+  initialDelaySeconds: 30
+  periodSeconds: 20
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /list
+    port: server
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+existingConfigMap: ""   # pre-existing ConfigMap in OpenShift (with "pipelines.yaml" and
+                         # "data-prepper-config.yaml" keys) — Helm will not create a new one
+                         #
+                         #   oc create configmap data-prepper-pipelines \
+                         #     --from-file=pipelines.yaml=<path> \
+                         #     --from-file=data-prepper-config.yaml=<path> \
+                         #     -n devops
+                         #
+                         # then set existingConfigMap: "data-prepper-pipelines" above
+                         # (or per-environment in helm-charts/log-pipeline/values-<env>.yaml).
+
+existingSecret: ""   # pre-existing Secret in OpenShift (with "username"/"password" keys)
+                      # holding the OpenSearch sink's basic-auth credentials — Helm will
+                      # not create a new one. Only read when openSearch.auth.enabled: true.
+                      #
+                      #   oc create secret generic data-prepper-opensearch-auth \
+                      #     --from-literal=username=<user> \
+                      #     --from-literal=password=<pass> \
+                      #     -n devops
+                      #
+                      # then set existingSecret: "data-prepper-opensearch-auth" above
+                      # (or per-environment in helm-charts/log-pipeline/values-<env>.yaml).
+
+# ── OpenSearch sink ──────────────────────────────────────────────────────────
+# Points at the load-balancer's OpenShift Service (already deployed, in front
+# of the 3-node OpenSearch VM cluster). Plain HTTP.
+# PROJECT-SPECIFIC: fill in the load-balancer's Service name/namespace/port.
+openSearch:
+  hosts:
+    - "http://<your-opensearch-lb-service>.<your-opensearch-lb-namespace>.svc.cluster.local:<your-opensearch-lb-port>"
+  logIndex: "dummy-app-logs-%{yyyy.MM.dd}"
+
+  # Your OpenSearch cluster currently has the security plugin disabled (no
+  # auth, no TLS) — leave this false. Flip to true once security is enabled;
+  # the username/password are never baked into the pipelines.yaml ConfigMap
+  # in plaintext — they're injected as env vars from a Secret and referenced
+  # via Data Prepper's "${VAR}" pipeline-config substitution.
+  auth:
+    enabled: false
+    username: ""   # only used to create the Secret when existingSecret is empty
+    password: ""   # never commit a real value — use existingSecret instead

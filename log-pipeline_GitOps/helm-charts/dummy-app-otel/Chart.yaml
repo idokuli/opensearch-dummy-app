@@ -1,0 +1,6 @@
+apiVersion: v2
+name: dummy-app-otel
+description: Dummy trace generator — sends OTLP spans to Data Prepper's otel_trace_source
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: log-pipeline
+description: OpenSearch evaluation stack — dummy log/trace generators + Data Prepper. OpenSearch and its load-balancer are NOT deployed by this chart (external/already exist).
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+# Sub-charts are vendored in charts/ — no repository field needed.
+# Run `helm dep build` only if you remove the charts/ directory (re-vendors from file://).
+dependencies:
+  - name: dummy-app-http
+    version: "0.1.0"
+  - name: dummy-app-otel
+    version: "0.1.0"
+  - name: data-prepper
+    version: "0.1.0"

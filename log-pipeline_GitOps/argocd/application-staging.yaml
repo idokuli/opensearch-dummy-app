@@ -1,0 +1,45 @@
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: log-pipeline-staging
+  namespace: "<your-staging-argocd-namespace>"   # PROJECT-SPECIFIC: namespace where ArgoCD is installed on staging
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: "<your-gitops-repo-url>"       # PROJECT-SPECIFIC: URL of this log-pipeline_GitOps repo
+    targetRevision: HEAD
+    path: helm-charts/log-pipeline
+    helm:
+      releaseName: log-pipeline-staging
+      valueFiles:
+        - values.yaml
+        - values-staging.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    # All three environments intentionally share the single "devops" namespace.
+    # Each release name (log-pipeline-<env>) prefixes every resource, so
+    # staging/production/dr never collide here.
+    namespace: devops
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - ServerSideApply=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

@@ -1,0 +1,123 @@
+---
+# =============================================================================
+# dummy-app-http / dummy-app-otel pipelines.
+# Both are throwaway log/trace generators used to evaluate OpenSearch — no
+# app logic worth type-checking or unit-testing, so this only lints and builds.
+# =============================================================================
+
+.dummy_app_base:
+  extends: .base
+  image: $PYTHON_IMAGE
+  needs:
+    - job: detect
+      artifacts: true
+    - job: validate:variables
+      artifacts: false
+
+# ── dummy-app-http ──────────────────────────────────────────────────────────
+dummy-app-http:lint:
+  extends: .dummy_app_base
+  stage: lint
+  allow_failure: true
+  before_script:
+    - pip install --no-cache-dir ruff
+  script:
+    - |
+      [ "$DUMMY_APP_HTTP_CHANGED" = "1" ] || { echo "dummy-app-http unchanged — skipping lint."; exit 0; }
+      cd apps/dummy-app-http
+      ruff check .
+      ruff format --check .
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $FORCE_BUILD == "1"
+
+dummy-app-http:docker:build:
+  extends: .docker_base
+  stage: build
+  needs:
+    - job: detect
+      artifacts: true
+    - job: validate:variables
+      artifacts: false
+    - job: dummy-app-http:lint
+      optional: true
+  script:
+    - |
+      echo "DUMMY_APP_HTTP_IMAGE_TAG=" > build-dummy-app-http.env
+      [ "$DUMMY_APP_HTTP_CHANGED" = "1" ] || { echo "dummy-app-http unchanged — skipping build."; exit 0; }
+      IMAGE_TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+      /kaniko/executor \
+        --use-new-run \
+        --context "$CI_PROJECT_DIR/apps/dummy-app-http/" \
+        --dockerfile "$CI_PROJECT_DIR/apps/dummy-app-http/Dockerfile" \
+        --destination "$ARTIFACTORY_REGISTRY/dummy-app-http:$IMAGE_TAG" \
+        --insecure-pull \
+        --skip-tls-verify \
+        --snapshotMode=time \
+        --compressed-caching=false \
+        --cache-ttl=1440h0m0s \
+        --cache=true \
+        --ignore-path=/var \
+        --force
+      echo "DUMMY_APP_HTTP_IMAGE_TAG=$IMAGE_TAG" > build-dummy-app-http.env
+  artifacts:
+    reports:
+      dotenv: build-dummy-app-http.env
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)/
+    - if: $FORCE_BUILD == "1"
+
+# ── dummy-app-otel ───────────────────────────────────────────────────────────
+dummy-app-otel:lint:
+  extends: .dummy_app_base
+  stage: lint
+  allow_failure: true
+  before_script:
+    - pip install --no-cache-dir ruff
+  script:
+    - |
+      [ "$DUMMY_APP_OTEL_CHANGED" = "1" ] || { echo "dummy-app-otel unchanged — skipping lint."; exit 0; }
+      cd apps/dummy-app-otel
+      ruff check .
+      ruff format --check .
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $FORCE_BUILD == "1"
+
+dummy-app-otel:docker:build:
+  extends: .docker_base
+  stage: build
+  needs:
+    - job: detect
+      artifacts: true
+    - job: validate:variables
+      artifacts: false
+    - job: dummy-app-otel:lint
+      optional: true
+  script:
+    - |
+      echo "DUMMY_APP_OTEL_IMAGE_TAG=" > build-dummy-app-otel.env
+      [ "$DUMMY_APP_OTEL_CHANGED" = "1" ] || { echo "dummy-app-otel unchanged — skipping build."; exit 0; }
+      IMAGE_TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+      /kaniko/executor \
+        --use-new-run \
+        --context "$CI_PROJECT_DIR/apps/dummy-app-otel/" \
+        --dockerfile "$CI_PROJECT_DIR/apps/dummy-app-otel/Dockerfile" \
+        --destination "$ARTIFACTORY_REGISTRY/dummy-app-otel:$IMAGE_TAG" \
+        --insecure-pull \
+        --skip-tls-verify \
+        --snapshotMode=time \
+        --compressed-caching=false \
+        --cache-ttl=1440h0m0s \
+        --cache=true \
+        --ignore-path=/var \
+        --force
+      echo "DUMMY_APP_OTEL_IMAGE_TAG=$IMAGE_TAG" > build-dummy-app-otel.env
+  artifacts:
+    reports:
+      dotenv: build-dummy-app-otel.env
+    expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)/
+    - if: $FORCE_BUILD == "1"

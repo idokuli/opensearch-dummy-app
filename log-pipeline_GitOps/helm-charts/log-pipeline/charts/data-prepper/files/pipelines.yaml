@@ -1,0 +1,52 @@
+log-pipeline:
+  source:
+    http:
+      port: 2021
+  sink:
+    - opensearch:
+        hosts:
+          - http://<your-opensearch-lb-service>.<namespace>.svc.cluster.local:<port>
+        index: "dummy-app-logs-%{yyyy.MM.dd}"
+        username: "${OPENSEARCH_USERNAME}"
+        password: "${OPENSEARCH_PASSWORD}"
+
+entry-pipeline:
+  delay: "100"
+  source:
+    otel_trace_source:
+      ssl: false
+      port: 21890
+  sink:
+    - pipeline:
+        name: "raw-trace-pipeline"
+    - pipeline:
+        name: "service-map-pipeline"
+
+raw-trace-pipeline:
+  source:
+    pipeline:
+      name: "entry-pipeline"
+  processor:
+    - otel_trace_raw:
+  sink:
+    - opensearch:
+        hosts:
+          - http://<your-opensearch-lb-service>.<namespace>.svc.cluster.local:<port>
+        index_type: trace-analytics-raw
+        username: "${OPENSEARCH_USERNAME}"
+        password: "${OPENSEARCH_PASSWORD}"
+
+service-map-pipeline:
+  delay: "100"
+  source:
+    pipeline:
+      name: "entry-pipeline"
+  processor:
+    - service_map_stateful:
+  sink:
+    - opensearch:
+        hosts:
+          - http://<your-opensearch-lb-service>.<namespace>.svc.cluster.local:<port>
+        index_type: trace-analytics-service-map
+        username: "${OPENSEARCH_USERNAME}"
+        password: "${OPENSEARCH_PASSWORD}"

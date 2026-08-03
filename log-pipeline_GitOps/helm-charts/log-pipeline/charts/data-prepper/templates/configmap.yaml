@@ -1,0 +1,80 @@
+{{- if not .Values.existingConfigMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "data-prepper.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "data-prepper.labels" . | nindent 4 }}
+data:
+  # Server-level config: Data Prepper's own admin/metrics endpoint (port 4900).
+  # OpenSearch itself and Kibana/OpenSearch Dashboards are also unsecured
+  # (plain HTTP, no security plugin) — ssl is disabled here to match.
+  data-prepper-config.yaml: |
+    ssl: false
+
+  # Two independent pipelines fed by the two dummy apps:
+  #   log-pipeline            <- dummy-app-http  (http source, :2021, POST /log/ingest)
+  #   entry-pipeline + fan-out <- dummy-app-otel  (otel_trace_source, :21890, gRPC)
+  # Both sinks point at the OpenSearch load-balancer Service — plain HTTP. If
+  # openSearch.auth.enabled, credentials are pulled from OPENSEARCH_USERNAME/
+  # OPENSEARCH_PASSWORD env vars (sourced from a Secret, see secret.yaml) via
+  # Data Prepper's "${VAR}" pipeline-config substitution — never written here
+  # in plaintext.
+  pipelines.yaml: |
+    log-pipeline:
+      source:
+        http:
+          port: {{ .Values.service.httpSourcePort }}
+      sink:
+        - opensearch:
+            hosts:{{ .Values.openSearch.hosts | toYaml | nindent 14 }}
+            index: "{{ .Values.openSearch.logIndex }}"
+            {{- if .Values.openSearch.auth.enabled }}
+            username: "${OPENSEARCH_USERNAME}"
+            password: "${OPENSEARCH_PASSWORD}"
+            {{- end }}
+
+    entry-pipeline:
+      delay: "100"
+      source:
+        otel_trace_source:
+          ssl: false
+          port: {{ .Values.service.otelTraceSourcePort }}
+      sink:
+        - pipeline:
+            name: "raw-trace-pipeline"
+        - pipeline:
+            name: "service-map-pipeline"
+
+    raw-trace-pipeline:
+      source:
+        pipeline:
+          name: "entry-pipeline"
+      processor:
+        - otel_trace_raw:
+      sink:
+        - opensearch:
+            hosts:{{ .Values.openSearch.hosts | toYaml | nindent 14 }}
+            index_type: trace-analytics-raw
+            {{- if .Values.openSearch.auth.enabled }}
+            username: "${OPENSEARCH_USERNAME}"
+            password: "${OPENSEARCH_PASSWORD}"
+            {{- end }}
+
+    service-map-pipeline:
+      delay: "100"
+      source:
+        pipeline:
+          name: "entry-pipeline"
+      processor:
+        - service_map_stateful:
+      sink:
+        - opensearch:
+            hosts:{{ .Values.openSearch.hosts | toYaml | nindent 14 }}
+            index_type: trace-analytics-service-map
+            {{- if .Values.openSearch.auth.enabled }}
+            username: "${OPENSEARCH_USERNAME}"
+            password: "${OPENSEARCH_PASSWORD}"
+            {{- end }}
+{{- end }}

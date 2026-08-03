@@ -1,0 +1,70 @@
+# Umbrella chart base values — keys MUST match sub-chart names in Chart.yaml.
+# Image tags for dummy-app-http/dummy-app-otel are NOT set here — they live
+# in values-<env>.yaml and are updated automatically by the CI pipeline.
+# data-prepper's tag IS set here (2.16.0) since it's a vendored upstream
+# image, not built by this project's CI.
+
+dummy-app-http:
+  image:
+    # PROJECT-SPECIFIC: set to your Artifactory registry path
+    repository: <your-artifactory-registry>/dummy-app-http
+    tag: ""       # set in values-<env>.yaml by CI
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+  # PROJECT-SPECIFIC: overridden per environment in values-<env>.yaml to
+  # match that environment's data-prepper Service name
+  # ("<release-name>-data-prepper").
+  env:
+    DATA_PREPPER_URL: "http://<your-data-prepper-service>:2021/log/ingest"
+
+dummy-app-otel:
+  image:
+    # PROJECT-SPECIFIC: set to your Artifactory registry path
+    repository: <your-artifactory-registry>/dummy-app-otel
+    tag: ""       # set in values-<env>.yaml by CI
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+  # PROJECT-SPECIFIC: overridden per environment in values-<env>.yaml to
+  # match that environment's data-prepper Service name
+  # ("<release-name>-data-prepper").
+  env:
+    OTLP_ENDPOINT: "<your-data-prepper-service>:21890"
+
+data-prepper:
+  image:
+    # PROJECT-SPECIFIC: mirror opensearchproject/data-prepper:2.16.0 here
+    repository: <your-artifactory-registry>/data-prepper
+    tag: "2.16.0"   # NOT managed by CI — bump manually when you mirror a new version
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  # PROJECT-SPECIFIC: the OpenShift Service in front of the 3-node OpenSearch
+  # VM cluster. Plain HTTP — OpenSearch's security plugin is disabled.
+  openSearch:
+    hosts:
+      - "http://<your-opensearch-lb-service>.<your-opensearch-lb-namespace>.svc.cluster.local:<your-opensearch-lb-port>"
+    logIndex: "dummy-app-logs-%{yyyy.MM.dd}"
+
+# NOTE: OpenSearch and OpenSearch Dashboards are NOT deployed by this chart —
+# they run on 3 external VMs reached through the load-balancer above.

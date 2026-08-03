@@ -1,0 +1,90 @@
+---
+stages:
+  - lint
+  - validate
+
+# =============================================================================
+# Project-level variables — edit these values and the pipeline will work.
+# =============================================================================
+variables:
+  RUNNER_TAG: "<your-runner-tag>"       # GitLab runner tag (e.g. docker, staging-runner)
+  HELM_IMAGE: "<your-helm-image>"       # internal Helm image (e.g. your-registry/helm:latest)
+  # must have pip available — yamllint is installed at runtime
+  PYTHON_IMAGE: "<your-python-image>"   # internal Python image (e.g. your-registry/python:3.12-slim)
+
+.base:
+  tags:
+    - $RUNNER_TAG
+
+# =============================================================================
+# yamllint — validates pure-YAML files (argocd/ and helm-charts/log-pipeline/ values).
+# Helm template files are excluded: the {{ }} Go syntax is not valid YAML.
+# Those are covered by helm:lint and helm:template below.
+# =============================================================================
+yamllint:
+  extends: .base
+  image:
+    name: $PYTHON_IMAGE
+    entrypoint: [""]
+  stage: lint
+  script:
+    - pip install yamllint --quiet
+    - echo "── Linting argocd/ ──────────────────────────────────"
+    - yamllint -c .yamllint.yaml argocd/
+    - echo "── Linting values files ─────────────────────────────"
+    - yamllint -c .yamllint.yaml helm-charts/log-pipeline/values-staging.yaml
+    - yamllint -c .yamllint.yaml helm-charts/log-pipeline/values-production.yaml
+    - yamllint -c .yamllint.yaml helm-charts/log-pipeline/values-dr.yaml
+    - echo "── yamllint passed."
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# =============================================================================
+# helm:lint — validates chart structure and values for each sub-chart and
+# the umbrella chart.
+# =============================================================================
+helm:lint:
+  extends: .base
+  image:
+    name: $HELM_IMAGE
+    entrypoint: [""]
+  stage: lint
+  script:
+    - echo "── Linting dummy-app-http chart ─────────────────────"
+    - helm lint helm-charts/dummy-app-http/
+    - echo "── Linting dummy-app-otel chart ─────────────────────"
+    - helm lint helm-charts/dummy-app-otel/
+    - echo "── Linting data-prepper chart ────────────────────────"
+    - helm lint helm-charts/data-prepper/
+    - echo "── Linting umbrella chart ───────────────────────────"
+    - helm lint helm-charts/log-pipeline/
+    - echo "── helm lint passed."
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# =============================================================================
+# helm:template — renders the umbrella chart with each environment's values
+# to catch any template errors that lint alone won't catch.
+# =============================================================================
+helm:template:
+  extends: .base
+  image:
+    name: $HELM_IMAGE
+    entrypoint: [""]
+  stage: validate
+  needs:
+    - helm:lint
+    - yamllint
+  script:
+    - echo "── Templating staging ───────────────────────────────"
+    - helm template log-pipeline-staging helm-charts/log-pipeline/ -f helm-charts/log-pipeline/values-staging.yaml > /dev/null
+    - echo "── Templating production ────────────────────────────"
+    - helm template log-pipeline-production helm-charts/log-pipeline/ -f helm-charts/log-pipeline/values-production.yaml > /dev/null
+    - echo "── Templating dr ────────────────────────────────────"
+    - helm template log-pipeline-dr helm-charts/log-pipeline/ -f helm-charts/log-pipeline/values-dr.yaml > /dev/null
+    - echo "── helm template passed for all environments."
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

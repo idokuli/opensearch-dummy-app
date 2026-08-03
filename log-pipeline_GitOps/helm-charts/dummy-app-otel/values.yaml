@@ -1,0 +1,46 @@
+replicaCount: 1
+
+image:
+  # PROJECT-SPECIFIC: set to your Artifactory registry path
+  repository: <your-artifactory-registry>/dummy-app-otel
+  tag: ""  # always set by CI via the "# MANAGED BY CI:dummy-app-otel" marker in values-<env>.yaml
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podLabels: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Data Prepper's otel_trace_source gRPC endpoint this generator sends spans to.
+# PROJECT-SPECIFIC: set per environment in values-<env>.yaml — must match the
+# in-cluster Service name of the data-prepper release for that environment
+# (Helm's default fullname is "<release-name>-data-prepper").
+env:
+  OTLP_ENDPOINT: "<your-data-prepper-service>:21890"

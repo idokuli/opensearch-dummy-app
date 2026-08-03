@@ -1,0 +1,38 @@
+---
+_meta:
+  type: "config"
+  config_version: 2
+
+config:
+  dynamic:
+    http:
+      anonymous_auth_enabled: false
+    authc:
+      internal_auth:
+        order: 0
+        http_enabled: true
+        transport_enabled: true
+        http_authenticator:
+          type: basic
+          challenge: true
+        authentication_backend:
+          type: internal
+      ldap_auth:
+        order: 1
+        http_enabled: true
+        transport_enabled: true
+        http_authenticator:
+          type: basic
+          challenge: false
+        authentication_backend:
+          type: ldap
+          config:
+            enable_ssl: false
+            enable_start_tls: false
+            hosts:
+            - <ldap_host>:389
+            bind_dn: CN=<bind_dn>,DC=<dc>,DC=<dc>
+            password: <password>
+            userbase: dc=<dc>,dc=<dc>
+            usersearch: (sAMAccountName={0})
+            username_attribute: sAMAccountName

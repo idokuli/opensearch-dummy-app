@@ -1,0 +1,15 @@
+---
+_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "$2y$12$WXNGjrX8ltYDQl7LH6jjVuRD1hqcihcTutkRfxQLNchAs12osekeu" 
+  #This is the hash of the password "admin", can be reset from the docker exec command cd /usr/share/opensearch/config/opensearch-security/ && hash.sh -p <password>
+  reserved: true
+  backend_roles:
+  - "admin"
+  description: "Demo admin user"
+kibanaserver:
+  hash: "$2a$12$4AcgAt3xwOWadA5s5blL6ev39OXDNhmOesEoo33eZtrq2N0YrU3H."
+  reserved: true
+  description: "Demo kibanaserver user"

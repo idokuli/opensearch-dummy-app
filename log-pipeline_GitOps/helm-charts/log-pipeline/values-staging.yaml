@@ -1,0 +1,44 @@
+---
+# Staging environment — merged on top of charts/log-pipeline/values.yaml by ArgoCD.
+# Release name: log-pipeline-staging -> data-prepper Service name:
+# log-pipeline-staging-data-prepper (Helm default fullname). The dummy apps'
+# env below MUST stay in sync with that name.
+#
+# Image tags on lines marked "# MANAGED BY CI" are updated automatically by
+# the CI pipeline after each successful image build. Do not edit those lines
+# manually.
+
+dummy-app-http:
+  image:
+    tag: "latest"   # MANAGED BY CI:dummy-app-http — do not edit
+
+  replicaCount: 1
+
+  env:
+    DATA_PREPPER_URL: "http://log-pipeline-staging-data-prepper:2021/log/ingest"
+
+dummy-app-otel:
+  image:
+    tag: "latest"   # MANAGED BY CI:dummy-app-otel — do not edit
+
+  replicaCount: 1
+
+  env:
+    OTLP_ENDPOINT: "log-pipeline-staging-data-prepper:21890"
+
+data-prepper:
+  replicaCount: 1
+
+  # Manually-created ConfigMap holding pipelines.yaml + data-prepper-config.yaml
+  # (see helm-charts/data-prepper/files/ for reference copies of its content).
+  existingConfigMap: "opensearch-configmap"
+
+  # Manually-created Secret with "username"/"password" keys — the real
+  # OpenSearch admin credentials. Injected as OPENSEARCH_USERNAME/
+  # OPENSEARCH_PASSWORD env vars and referenced from pipelines.yaml via
+  # Data Prepper's "${VAR}" substitution.
+  existingSecret: "opensearch-secrets"
+
+  openSearch:
+    auth:
+      enabled: true
